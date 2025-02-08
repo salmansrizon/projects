@@ -1,7 +1,3 @@
-# README.md
-
----
-
 ## **Restaurant wise Delivery point**
 
 This Streamlit-based application visualizes the relationship between restaurants and their delivery networks. It allows users to filter data by zone and restaurant, calculates distances using the Haversine formula, and provides an interactive map visualization of restaurant-to-delivery connections. Additionally, it offers insights into daily order trends and average delivery statistics.
@@ -40,27 +36,28 @@ Before running this application, ensure you have the following prerequisites ins
 ---
 **Step- 1: Need to filter zone**
 
-![Alt text](images\1.png?raw=true "Title")
+![Alt text](images/1.png)
 
 **Step- 2: Need to filter Restturants under selected zone**
 
-![Alt text](images\2.png?raw=true "Title")
+![Alt text](images/2.png)
 
 **Step- 3: Map View**
 
-![Alt text](images\3.png?raw=true "Title")
+![Alt text](images/3.png)
 
 green circle resembles the delivery points. On hover this will show Order number, Order Date & Distance from restaurants.
 
 **Step- 4: Daily Order Trendline View**
 
-![Alt text](images\4.png?raw=true "Title")
+![Alt text](images/4.png)
 
 ### **Main Features of the Code**
 
 1. **Interactive Filtering**:
    - Users can filter data by selecting a specific zone and restaurant from dropdown menus in the sidebar.
    - A "Show Relation" button triggers the visualization process based on the selected filters.
+
     ```
         zones = sorted(df["ZoneName"].unique())
         zone_options = ["Select Zone"] + zones
@@ -70,17 +67,54 @@ green circle resembles the delivery points. On hover this will show Order number
 2. **Distance Calculation**:
    - The Haversine formula is implemented in a vectorized manner using NumPy for efficient computation of distances between restaurant locations and delivery points.
 
+   ```
+    def haversine_vectorized(lat1, lon1, lat2, lon2):
+        R = 6371.0  # Earth radius in km
+        lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = (
+            np.sin(dlat / 2) ** 2
+            + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+        )
+        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+        return R * c
+    ```
+
 3. **Interactive Map Visualization**:
    - Built using Plotly's `Scattermap`, the map displays:
      - Restaurant locations (marked with star icons).
      - Delivery points (marked with circle icons).
      - Connection lines between restaurants and delivery points.
+    ```
+    fig.add_trace(
+        go.Scattermap(
+            lat=restaurant_data["lat"],
+            lon=restaurant_data["lon"],
+            mode="markers",
+            marker=dict(symbol="star", size=14, color="blue"),
+            text=restaurant_data["restaurant_name"],
+            hovertemplate="<b>Restaurant:</b> %{text}<extra></extra>",
+            name="Restaurant",
+        )
+    )
+    ```
+
    - Hover interactions provide detailed information about restaurants, orders, and computed distances.
 
 4. **Daily Order Trends**:
    - The application analyzes order data to compute:
      - Average daily order deliveries.
      - Daily order trends displayed as a line chart.
+
+    ```
+    daily_orders = (
+        filtered_df.groupby(filtered_df["order_date"].dt.date)
+        .size()
+        .reset_index(name="orders")
+    )
+    avg_daily_orders = daily_orders["orders"].mean() if not daily_orders.empty else 0
+    ```
 
 5. **Responsive Layout**:
    - The interface is designed to adapt to different screen sizes, with the map occupying 80% of the screen width and summary statistics displayed in the remaining space.
@@ -110,14 +144,54 @@ The primary purpose of this application is to provide a comprehensive visualizat
 1. **Vectorized Haversine Distance Calculation**:
    - Instead of using iterative loops, the Haversine formula is applied in a vectorized manner using NumPy. This approach significantly improves performance, especially for large datasets.
 
+    ```
+        filtered_df["distance_km"] = haversine_vectorized(
+            filtered_df["Latitude"],
+            filtered_df["Longitude"],
+            filtered_df["DeliveryLat"],
+            filtered_df["DeliveryLong"],
+        ).round(2)
+    ```
+
 2. **Efficient Data Loading with Caching**:
    - The `@st.cache_data` decorator ensures that data loading and preprocessing are performed only once, reducing redundant computations and improving application responsiveness.
+
+    ```
+        @st.cache_data
+        def load_data():
+            restaurants = pd.read_csv("restaurants_lat_long.csv").dropna(axis=1, how="all")
+            orders = pd.read_csv("order_data.csv").dropna(axis=1, how="all")
+            merged_df = pd.merge(
+                orders, restaurants, left_on="BranchId", right_on="id", how="inner"
+            )
+            return merged_df
+    ```
 
 3. **Dynamic Map Centering**:
    - The map dynamically centers on the selected restaurant's location, ensuring optimal visibility of delivery points and connection lines.
 
+    ```
+    center_lat = restaurant_data["lat"].mean()
+    center_lon = restaurant_data["lon"].mean()
+    fig.update_layout(
+        map=dict(
+            style="open-street-map",
+            center=dict(lat=center_lat, lon=center_lon),
+            zoom=12,
+        ),
+    )
+    ```
+
 4. **Custom Hover Templates**:
    - Plotly's hover templates are customized to display relevant information, such as restaurant names, order IDs, delivery dates, and computed distances, enhancing user experience.
+    
+    ```
+    hovertemplate=(
+        "<b>Order ID:</b> %{text}<br>"
+        + "<b>Date:</b> %{customdata[0]}<br>"
+        + "<b>Distance:</b> %{customdata[1]} km<extra></extra>"
+    ),
+    ```
 
 5. **Separation of Concerns**:
    - The code is modular, with distinct sections for data loading, filtering, distance calculation, and visualization. This structure promotes readability, maintainability, and scalability.
